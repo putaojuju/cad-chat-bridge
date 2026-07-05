@@ -60,8 +60,6 @@ Example ChatGPT server URL:
 https://example-tunnel-domain/mcp
 ```
 
-Do not use `/sse` for this MVP fallback.
-
 ## ChatGPT connector settings
 
 In ChatGPT connector setup:
