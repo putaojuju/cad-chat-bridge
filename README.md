@@ -10,7 +10,7 @@ The first MVP is intentionally small:
 - list and describe a safe local command catalog;
 - generate conservative viewport/selection probe scripts for future read-only AutoCAD context reads.
 
-It does **not** expose a web server, tunnel, arbitrary AutoLISP execution, arbitrary AutoCAD command execution, drawing save operations, or private business automation.
+It does **not** expose a web server, public tunnel, arbitrary AutoLISP execution, arbitrary AutoCAD command execution, drawing save operations, or private business automation.
 
 ## Install
 
@@ -38,6 +38,12 @@ Example MCP client configuration:
   }
 }
 ```
+
+## ChatGPT cloud testing
+
+The preferred ChatGPT cloud test path is OpenAI Secure MCP Tunnel. Keep CAD Chat Bridge as a local stdio MCP server and let `tunnel-client` start it with `--mcp-command`.
+
+See [`docs/SECURE_MCP_TUNNEL_SETUP.md`](docs/SECURE_MCP_TUNNEL_SETUP.md).
 
 ## MVP tools
 
