@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "example.read.status",
+      "title": "Status Example",
+      "description": "Public placeholder item for catalog discovery. It is disabled and not runnable in the MVP.",
+      "category": "read",
+      "effect": "read_only",
+      "enabled": false,
+      "runnable": false,
+      "parameters": {},
+      "safety": {
+        "modifies_drawing": false,
+        "writes_files": false,
+        "loads_lisp": false,
+        "requires_quiescent": true
+      }
+    }
+  ]
+}
