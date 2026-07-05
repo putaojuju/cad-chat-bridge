@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from cad_chat_bridge import __version__
@@ -19,27 +20,35 @@ REGISTERED_TOOLS = (
     "cad_describe_catalog_item",
 )
 
+DANGEROUS_TOOLS_NOT_REGISTERED = (
+    "cad_run_lisp",
+    "cad_send_command",
+    "cad_load_lisp",
+    "cad_save_as",
+    "cad_write_file",
+)
 
-def ping_payload() -> dict[str, Any]:
+ActiveDocumentFilter = Callable[[dict[str, Any]], dict[str, Any]]
+
+
+def ping_payload(*, transport: str = "stdio") -> dict[str, Any]:
     """Return the static server capability payload used by cad_ping."""
 
     return ok(
         server="cad-chat-bridge",
         version=__version__,
-        transport="stdio",
-        local_only=True,
+        transport=transport,
+        local_only=transport == "stdio",
         tools=list(REGISTERED_TOOLS),
-        explicitly_not_registered=[
-            "cad_run_lisp",
-            "cad_send_command",
-            "cad_load_lisp",
-            "cad_save_as",
-            "http_service",
-        ],
+        explicitly_not_registered=list(DANGEROUS_TOOLS_NOT_REGISTERED),
     )
 
 
-def create_mcp_server() -> Any:
+def create_mcp_server(
+    *,
+    transport_label: str = "stdio",
+    active_document_filter: ActiveDocumentFilter | None = None,
+) -> Any:
     """Create the FastMCP server.
 
     Importing FastMCP is delayed so unit tests and non-MCP installs can import
@@ -60,7 +69,7 @@ def create_mcp_server() -> Any:
     def cad_ping() -> str:
         """Check that the CAD Chat Bridge MCP server is reachable."""
 
-        return dumps(ping_payload())
+        return dumps(ping_payload(transport=transport_label))
 
     @mcp.tool()
     def cad_diagnose_access(timeout_sec: float = 5.0) -> str:
@@ -74,7 +83,10 @@ def create_mcp_server() -> Any:
     ) -> str:
         """Return active AutoCAD document metadata when local COM access is available."""
 
-        return dumps(get_active_document(allow_start=allow_start, timeout_sec=timeout_sec))
+        payload = get_active_document(allow_start=allow_start, timeout_sec=timeout_sec)
+        if active_document_filter is not None:
+            payload = active_document_filter(payload)
+        return dumps(payload)
 
     @mcp.tool()
     def cad_list_catalog(category: str | None = None) -> str:
