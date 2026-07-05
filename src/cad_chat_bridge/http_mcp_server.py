@@ -53,7 +53,6 @@ def redact_active_document_payload(
         "application": payload.get("application", "AutoCAD"),
         "name": payload.get("name", ""),
         "quiescent": payload.get("quiescent"),
-        "full_name_redacted": not expose_full_name,
     }
     if expose_full_name:
         redacted["full_name"] = payload.get("full_name", "")
