@@ -17,6 +17,7 @@ dependencies = []
 [project.optional-dependencies]
 mcp = [
   "mcp>=1.0",
+  "uvicorn>=0.30",
   "pywin32>=306; platform_system == 'Windows'",
 ]
 dev = [
@@ -26,6 +27,7 @@ dev = [
 
 [project.scripts]
 cad-chat-bridge = "cad_chat_bridge.mcp_server:main"
+cad-chat-bridge-http = "cad_chat_bridge.http_mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
