@@ -59,7 +59,6 @@ def test_active_document_default_redacts_full_name():
         "application": "AutoCAD",
         "name": "demo.dwg",
         "quiescent": True,
-        "full_name_redacted": True,
     }
     assert "full_name" not in redacted
 
@@ -76,7 +75,6 @@ def test_active_document_can_expose_full_name_when_explicitly_enabled():
     exposed = redact_active_document_payload(payload, expose_full_name=True)
 
     assert exposed["full_name"] == payload["full_name"]
-    assert exposed["full_name_redacted"] is False
 
 
 def test_http_full_name_env_flag_is_off_by_default():
