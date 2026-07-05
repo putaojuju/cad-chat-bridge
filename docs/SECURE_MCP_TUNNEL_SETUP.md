@@ -4,6 +4,18 @@ This guide documents the preferred cloud ChatGPT test path for CAD Chat Bridge.
 
 CAD Chat Bridge remains a local stdio MCP server. For ChatGPT cloud testing, use OpenAI Secure MCP Tunnel so the local server can stay inside the workstation trust boundary while ChatGPT reaches it through an OpenAI-managed tunnel endpoint.
 
+## Local stdio vs cloud ChatGPT connector testing
+
+Local stdio testing means the MCP client runs on the same workstation and starts the server with a command such as:
+
+```powershell
+python -m cad_chat_bridge.mcp_server
+```
+
+That path is useful for local clients such as Codex, Claude Desktop, MCP Inspector, or any MCP client that can launch a stdio server on the same machine.
+
+Cloud ChatGPT cannot directly connect to a local process's stdin/stdout on your workstation. For cloud ChatGPT connector testing, keep this project as a local stdio MCP server and use Secure MCP Tunnel to bridge ChatGPT to the local stdio command.
+
 ## Why this path
 
 The MVP is intentionally not an HTTP server and does not bind a public port. A generic public HTTP tunnel is not the right default for an AutoCAD bridge because the target process is a local desktop CAD session.
@@ -99,13 +111,13 @@ If the tunnel is not visible, check that the tunnel is associated with the targe
 
 ## MVP cloud test checklist
 
-Test only these tools in the first PR:
+First-round cloud testing must be limited to these five MVP tools:
 
 - `cad_ping`
-- `cad_list_catalog`
-- `cad_describe_catalog_item`
 - `cad_diagnose_access`
 - `cad_get_active_document`
+- `cad_list_catalog`
+- `cad_describe_catalog_item`
 
 Expected results:
 
@@ -124,8 +136,9 @@ A mismatch can prevent COM access. Prefer normal user for both unless you have a
 
 ## Security rules for cloud testing
 
-- Do not add a public HTTP server to this MVP just for cloud testing.
-- Do not expose the local AutoCAD bridge through a generic public HTTP tunnel.
+- Keep the MVP implementation local stdio-only.
+- Do not add HTTP server code to this MVP just for cloud testing.
+- Do not expose the local AutoCAD bridge through ngrok, a generic public HTTP tunnel, or a public port.
 - Do not add tools that pass through arbitrary CAD commands.
 - Do not add tools that evaluate caller-supplied CAD scripts.
 - Do not add save or save-as tools during this tunnel test.
