@@ -1,6 +1,6 @@
 # ChatGPT MCP Setup
 
-This document shows how to run CAD Chat Bridge as a local stdio MCP server and how to test it from ChatGPT cloud through Secure MCP Tunnel.
+This document shows how to run CAD Chat Bridge as a local stdio MCP server and how to test it from ChatGPT cloud through the development HTTP connector fallback.
 
 ## Install
 
@@ -15,7 +15,7 @@ python -m pip install -e ".[dev,mcp]"
 pytest
 ```
 
-## Run locally
+## Run locally with stdio
 
 ```bash
 python -m cad_chat_bridge.mcp_server
@@ -34,11 +34,21 @@ python -m cad_chat_bridge.mcp_server
 }
 ```
 
-## ChatGPT cloud route
+## Run local dev HTTP fallback
 
-For cloud ChatGPT testing, do not convert this MVP into a public HTTP service. Use OpenAI Secure MCP Tunnel with a local stdio profile instead.
+```bash
+python -m cad_chat_bridge.http_mcp_server --host 127.0.0.1 --port 3333
+```
 
-See [`SECURE_MCP_TUNNEL_SETUP.md`](SECURE_MCP_TUNNEL_SETUP.md) for the tunnel workflow.
+The HTTP MCP endpoint is:
+
+```text
+http://127.0.0.1:3333/mcp
+```
+
+For ChatGPT server URL testing, expose that local port with a development tunnel such as ngrok or Cloudflare Tunnel and use the HTTPS URL ending in `/mcp`.
+
+See [`DEV_HTTP_CONNECTOR_SETUP.md`](DEV_HTTP_CONNECTOR_SETUP.md) for the full dev connector workflow.
 
 ## Windows and AutoCAD notes
 
@@ -54,4 +64,4 @@ The first skeleton registers only:
 - `cad_list_catalog`
 - `cad_describe_catalog_item`
 
-The MVP intentionally does not register write-capable tools, save operations, web services, public network entrypoints, or private business catalogs.
+The MVP intentionally does not register write-capable tools, save operations, arbitrary command passthrough, arbitrary AutoLISP execution, or private business catalogs.
