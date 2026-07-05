@@ -5,12 +5,13 @@ CAD Chat Bridge is a public, local-first MCP bridge for connecting ChatGPT-compa
 The first MVP is intentionally small:
 
 - expose a minimal MCP server over stdio;
+- provide a development-only HTTP MCP fallback for Apps SDK server URL testing;
 - diagnose whether local AutoCAD COM access is available;
 - read the active document metadata when AutoCAD is already running;
 - list and describe a safe local command catalog;
 - generate conservative viewport/selection probe scripts for future read-only AutoCAD context reads.
 
-It does **not** expose a web server, public tunnel, arbitrary AutoLISP execution, arbitrary AutoCAD command execution, drawing save operations, or private business automation.
+It does **not** expose arbitrary AutoLISP execution, arbitrary AutoCAD command execution, drawing save operations, or private business automation.
 
 ## Install
 
@@ -20,13 +21,13 @@ python -m pip install -e ".[dev,mcp]"
 
 `pywin32` is only installed on Windows when using the `mcp` extra. AutoCAD COM tools require Windows, AutoCAD, and `pywin32`.
 
-## Run the MCP server
+## Run the stdio MCP server
 
 ```bash
 python -m cad_chat_bridge.mcp_server
 ```
 
-Example MCP client configuration:
+Example local MCP client configuration:
 
 ```json
 {
@@ -39,11 +40,19 @@ Example MCP client configuration:
 }
 ```
 
-## ChatGPT cloud testing
+## Run the dev HTTP MCP fallback
 
-The preferred ChatGPT cloud test path is OpenAI Secure MCP Tunnel. Keep CAD Chat Bridge as a local stdio MCP server and let `tunnel-client` start it with `--mcp-command`.
+```bash
+python -m cad_chat_bridge.http_mcp_server --host 127.0.0.1 --port 3333
+```
 
-See [`docs/SECURE_MCP_TUNNEL_SETUP.md`](docs/SECURE_MCP_TUNNEL_SETUP.md).
+The development HTTP MCP endpoint is:
+
+```text
+http://127.0.0.1:3333/mcp
+```
+
+Use this only for development connector testing through an external tunnel such as ngrok or Cloudflare Tunnel. See [`docs/DEV_HTTP_CONNECTOR_SETUP.md`](docs/DEV_HTTP_CONNECTOR_SETUP.md).
 
 ## MVP tools
 
@@ -62,7 +71,6 @@ Not implemented or registered in the MVP:
 - `cad_load_lisp(path)`
 - arbitrary file writes
 - drawing save / save-as
-- HTTP service, public tunnel, or remote listener
 - private business catalogs, company drawing rules, shared-drive paths, customer data, or internal retrieval systems
 
 ## Local tests
