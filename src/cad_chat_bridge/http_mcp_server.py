@@ -19,6 +19,7 @@ DEFAULT_MCP_PATH = "/mcp"
 FULL_NAME_ENV = "CAD_CHAT_BRIDGE_HTTP_EXPOSE_FULLNAME"
 ALLOW_PUBLIC_BIND_ENV = "CAD_CHAT_BRIDGE_HTTP_ALLOW_PUBLIC_BIND"
 HTTP_REGISTERED_TOOLS = REGISTERED_TOOLS
+HTTP_CAD_GET_ACTIVE_DOCUMENT_ACCEPTS_ALLOW_START = False
 
 
 def env_flag(name: str, *, environ: dict[str, str] | None = None) -> bool:
@@ -59,6 +60,37 @@ def redact_active_document_payload(
     return redacted
 
 
+def redact_diagnostic_payload(
+    payload: dict[str, Any], *, expose_full_name: bool = False
+) -> dict[str, Any]:
+    """Redact diagnostic path and window-title details for dev HTTP mode."""
+
+    redacted = dict(payload)
+
+    com = redacted.get("com")
+    if isinstance(com, dict):
+        safe_com = dict(com)
+        if not expose_full_name:
+            safe_com.pop("full_name", None)
+        redacted["com"] = safe_com
+
+    processes = redacted.get("autocad_processes")
+    if isinstance(processes, list):
+        safe_processes = []
+        for process in processes:
+            if not isinstance(process, dict):
+                safe_processes.append(process)
+                continue
+            safe_process = dict(process)
+            title = safe_process.pop("window_title", None)
+            if title is not None:
+                safe_process["has_window_title"] = bool(title)
+            safe_processes.append(safe_process)
+        redacted["autocad_processes"] = safe_processes
+
+    return redacted
+
+
 def validate_host(host: str, *, environ: dict[str, str] | None = None) -> str:
     """Validate the bind host for the dev HTTP fallback."""
 
@@ -89,6 +121,10 @@ def create_http_mcp_server(
         active_document_filter=lambda payload: redact_active_document_payload(
             payload, expose_full_name=should_expose_full_name
         ),
+        diagnostic_filter=lambda payload: redact_diagnostic_payload(
+            payload, expose_full_name=should_expose_full_name
+        ),
+        expose_allow_start_param=HTTP_CAD_GET_ACTIVE_DOCUMENT_ACCEPTS_ALLOW_START,
     )
     configure_http_settings(mcp, host=resolved_host, port=port, mcp_path=resolved_path)
     return mcp
