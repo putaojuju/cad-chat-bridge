@@ -28,7 +28,7 @@ DANGEROUS_TOOLS_NOT_REGISTERED = (
     "cad_write_file",
 )
 
-ActiveDocumentFilter = Callable[[dict[str, Any]], dict[str, Any]]
+PayloadFilter = Callable[[dict[str, Any]], dict[str, Any]]
 
 
 def ping_payload(*, transport: str = "stdio") -> dict[str, Any]:
@@ -47,12 +47,15 @@ def ping_payload(*, transport: str = "stdio") -> dict[str, Any]:
 def create_mcp_server(
     *,
     transport_label: str = "stdio",
-    active_document_filter: ActiveDocumentFilter | None = None,
+    active_document_filter: PayloadFilter | None = None,
+    diagnostic_filter: PayloadFilter | None = None,
+    expose_allow_start_param: bool = True,
 ) -> Any:
     """Create the FastMCP server.
 
     Importing FastMCP is delayed so unit tests and non-MCP installs can import
-    this module without the optional dependency.
+    this module without the optional dependency. HTTP callers can disable the
+    ``allow_start`` tool parameter so a cloud request can never start AutoCAD.
     """
 
     try:
@@ -75,18 +78,34 @@ def create_mcp_server(
     def cad_diagnose_access(timeout_sec: float = 5.0) -> str:
         """Diagnose whether this local process can access a running AutoCAD instance."""
 
-        return dumps(diagnose_access(timeout_sec=timeout_sec))
+        payload = diagnose_access(timeout_sec=timeout_sec)
+        if diagnostic_filter is not None:
+            payload = diagnostic_filter(payload)
+        return dumps(payload)
 
-    @mcp.tool()
-    def cad_get_active_document(
-        allow_start: bool = False, timeout_sec: float = 10.0
-    ) -> str:
-        """Return active AutoCAD document metadata when local COM access is available."""
-
+    def _active_document_payload(*, allow_start: bool, timeout_sec: float) -> str:
         payload = get_active_document(allow_start=allow_start, timeout_sec=timeout_sec)
         if active_document_filter is not None:
             payload = active_document_filter(payload)
         return dumps(payload)
+
+    if expose_allow_start_param:
+
+        @mcp.tool()
+        def cad_get_active_document(
+            allow_start: bool = False, timeout_sec: float = 10.0
+        ) -> str:
+            """Return active AutoCAD document metadata when local COM access is available."""
+
+            return _active_document_payload(allow_start=allow_start, timeout_sec=timeout_sec)
+
+    else:
+
+        @mcp.tool()
+        def cad_get_active_document(timeout_sec: float = 10.0) -> str:
+            """Return active AutoCAD document metadata without starting AutoCAD."""
+
+            return _active_document_payload(allow_start=False, timeout_sec=timeout_sec)
 
     @mcp.tool()
     def cad_list_catalog(category: str | None = None) -> str:
