@@ -83,9 +83,15 @@ Only test these tools:
 
 Do not add broader CAD control tools just to make the connector test easier.
 
-## Active document path redaction
+## HTTP redaction and no-autostart rules
 
-HTTP mode redacts the AutoCAD document `FullName` by default. `cad_get_active_document` should return only the file name, AutoCAD application/status fields, and `quiescent` unless path exposure is explicitly enabled.
+HTTP mode redacts local machine details by default:
+
+- `cad_get_active_document` omits the AutoCAD document `FullName` unless path exposure is explicitly enabled.
+- `cad_diagnose_access` omits `com.full_name` unless path exposure is explicitly enabled.
+- `cad_diagnose_access` does not return raw `autocad_processes[*].window_title`; it returns `has_window_title` instead.
+
+HTTP mode also removes the `allow_start` parameter from `cad_get_active_document`. A cloud HTTP caller cannot request AutoCAD startup through this tool; the HTTP wrapper always calls the COM layer with `allow_start=False`.
 
 To temporarily include `full_name` for local-only debugging, set:
 
