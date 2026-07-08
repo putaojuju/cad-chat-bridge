@@ -52,7 +52,7 @@ The development HTTP MCP endpoint is:
 http://127.0.0.1:3333/mcp
 ```
 
-Use this only for development connector testing through an external tunnel such as ngrok or Cloudflare Tunnel. See [`docs/DEV_HTTP_CONNECTOR_SETUP.md`](docs/DEV_HTTP_CONNECTOR_SETUP.md).
+Use this only for development connector testing through an external tunnel such as ngrok or Cloudflare Tunnel. The wrapper also responds to `GET /` and CORS preflight requests for ChatGPT connector wizard compatibility. See [`docs/DEV_HTTP_CONNECTOR_SETUP.md`](docs/DEV_HTTP_CONNECTOR_SETUP.md).
 
 ## MVP tools
 
