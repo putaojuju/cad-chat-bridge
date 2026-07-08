@@ -38,13 +38,14 @@ The default host is `127.0.0.1`. The server does not bind to `0.0.0.0` by defaul
 
 ## Apps SDK compatibility wrapper
 
-The dev HTTP entry point wraps the FastMCP streamable HTTP app with a small Apps SDK compatibility layer:
+The dev HTTP entry point wraps the FastMCP streamable HTTP app with a small Apps SDK compatibility layer, following the behavior shown in the OpenAI Apps SDK quickstart:
 
 - `GET /` returns `200 text/plain` with a short health string.
 - `OPTIONS /mcp` returns `204` with CORS headers.
 - `OPTIONS /mcp/*`, including `/mcp/actions`, also returns `204` with CORS headers.
 - OAuth discovery and protected-resource metadata routes return `404 Not Found` while OAuth is not implemented.
 - MCP traffic still goes through `/mcp`.
+- The wrapper uses the FastMCP streamable HTTP app underneath and keeps the response path JSON-friendly for connector wizard testing.
 
 ## Expose the local port for ChatGPT server URL testing
 
@@ -68,6 +69,12 @@ Example ChatGPT server URL:
 
 ```text
 https://example-tunnel-domain/mcp
+```
+
+For your current ngrok tunnel, the connector server URL should be:
+
+```text
+https://dioxide-gigabyte-precise.ngrok-free.dev/mcp
 ```
 
 ## ChatGPT connector settings
@@ -139,8 +146,8 @@ For AutoCAD COM tests:
 ## Troubleshooting
 
 - Confirm `python -m cad_chat_bridge.http_mcp_server --host 127.0.0.1 --port 3333` is running.
-- Confirm `https://your-tunnel-domain/` returns `CAD Chat Bridge MCP server`.
-- Confirm `OPTIONS https://your-tunnel-domain/mcp` returns `204` and CORS headers.
+- Confirm `https://dioxide-gigabyte-precise.ngrok-free.dev/` returns `CAD Chat Bridge MCP server`.
+- Confirm `OPTIONS https://dioxide-gigabyte-precise.ngrok-free.dev/mcp` returns `204` and CORS headers.
 - Confirm the tunnel points to `http://127.0.0.1:3333`.
 - Confirm the ChatGPT server URL ends with `/mcp`.
 - Confirm the connector is not configured for OAuth unless OAuth support has been added in a future PR.
