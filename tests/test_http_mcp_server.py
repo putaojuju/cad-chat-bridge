@@ -1,3 +1,4 @@
+import asyncio
 import inspect
 import json
 import sys
@@ -101,6 +102,10 @@ async def _asgi_request(app, method: str, path: str):  # noqa: ANN001
     )
     headers = {key.decode().lower(): value.decode() for key, value in start.get("headers", [])}
     return start["status"], headers, body
+
+
+def _request(app, method: str, path: str):  # noqa: ANN001
+    return asyncio.run(_asgi_request(app, method, path))
 
 
 def test_http_server_module_imports_with_expected_defaults():
@@ -273,24 +278,22 @@ def test_http_diagnose_access_tool_redacts_diagnostics_by_default(monkeypatch):
     assert response["autocad_processes"][0]["has_window_title"] is True
 
 
-@pytest.mark.asyncio
-async def test_apps_sdk_http_get_root_returns_text(monkeypatch):
+def test_apps_sdk_http_get_root_returns_text(monkeypatch):
     _install_fake_fastmcp(monkeypatch)
     app = create_apps_sdk_http_app()
 
-    status, headers, body = await _asgi_request(app, "GET", "/")
+    status, headers, body = _request(app, "GET", "/")
 
     assert status == 200
     assert headers["content-type"].startswith("text/plain")
     assert body.decode() == ROOT_TEXT
 
 
-@pytest.mark.asyncio
-async def test_apps_sdk_http_options_mcp_returns_cors(monkeypatch):
+def test_apps_sdk_http_options_mcp_returns_cors(monkeypatch):
     _install_fake_fastmcp(monkeypatch)
     app = create_apps_sdk_http_app()
 
-    status, headers, body = await _asgi_request(app, "OPTIONS", "/mcp")
+    status, headers, body = _request(app, "OPTIONS", "/mcp")
 
     assert status == 204
     assert body == b""
@@ -298,12 +301,11 @@ async def test_apps_sdk_http_options_mcp_returns_cors(monkeypatch):
         assert headers[key.lower()] == value
 
 
-@pytest.mark.asyncio
-async def test_apps_sdk_http_options_mcp_actions_returns_cors(monkeypatch):
+def test_apps_sdk_http_options_mcp_actions_returns_cors(monkeypatch):
     _install_fake_fastmcp(monkeypatch)
     app = create_apps_sdk_http_app()
 
-    status, headers, body = await _asgi_request(app, "OPTIONS", "/mcp/actions")
+    status, headers, body = _request(app, "OPTIONS", "/mcp/actions")
 
     assert status == 204
     assert body == b""
@@ -311,8 +313,7 @@ async def test_apps_sdk_http_options_mcp_actions_returns_cors(monkeypatch):
         assert headers[key.lower()] == value
 
 
-@pytest.mark.asyncio
-async def test_apps_sdk_http_oauth_discovery_returns_404(monkeypatch):
+def test_apps_sdk_http_oauth_discovery_returns_404(monkeypatch):
     _install_fake_fastmcp(monkeypatch)
     app = create_apps_sdk_http_app()
 
@@ -321,17 +322,16 @@ async def test_apps_sdk_http_oauth_discovery_returns_404(monkeypatch):
         "/.well-known/oauth-protected-resource",
         "/.well-known/openid-configuration",
     ):
-        status, _headers, body = await _asgi_request(app, "GET", path)
+        status, _headers, body = _request(app, "GET", path)
         assert status == 404
         assert body == b"Not Found"
 
 
-@pytest.mark.asyncio
-async def test_apps_sdk_http_mcp_path_still_reaches_mcp_endpoint(monkeypatch):
+def test_apps_sdk_http_mcp_path_still_reaches_mcp_endpoint(monkeypatch):
     _install_fake_fastmcp(monkeypatch)
     app = create_apps_sdk_http_app()
 
-    status, headers, body = await _asgi_request(app, "POST", "/mcp")
+    status, headers, body = _request(app, "POST", "/mcp")
 
     assert status == 418
     assert body == b"fake mcp endpoint"
