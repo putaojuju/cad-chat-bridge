@@ -16,10 +16,22 @@ from cad_chat_bridge.mcp_server import REGISTERED_TOOLS, create_mcp_server
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 3333
 DEFAULT_MCP_PATH = "/mcp"
+ROOT_TEXT = "CAD Chat Bridge MCP server"
 FULL_NAME_ENV = "CAD_CHAT_BRIDGE_HTTP_EXPOSE_FULLNAME"
 ALLOW_PUBLIC_BIND_ENV = "CAD_CHAT_BRIDGE_HTTP_ALLOW_PUBLIC_BIND"
 HTTP_REGISTERED_TOOLS = REGISTERED_TOOLS
 HTTP_CAD_GET_ACTIVE_DOCUMENT_ACCEPTS_ALLOW_START = False
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, GET, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "content-type, mcp-session-id",
+    "Access-Control-Expose-Headers": "Mcp-Session-Id",
+}
+OAUTH_DISCOVERY_PREFIXES = (
+    "/.well-known/oauth-authorization-server",
+    "/.well-known/oauth-protected-resource",
+    "/.well-known/openid-configuration",
+)
 
 
 def env_flag(name: str, *, environ: dict[str, str] | None = None) -> bool:
@@ -148,19 +160,76 @@ def configure_http_settings(mcp: Any, *, host: str, port: int, mcp_path: str) ->
             pass
 
 
+def create_apps_sdk_http_app(
+    *,
+    host: str = DEFAULT_HOST,
+    port: int = DEFAULT_PORT,
+    mcp_path: str = DEFAULT_MCP_PATH,
+    expose_full_name: bool | None = None,
+) -> Any:
+    """Create an Apps SDK friendly ASGI app around the FastMCP streamable app."""
+
+    from starlette.applications import Starlette
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request
+    from starlette.responses import PlainTextResponse, Response
+    from starlette.routing import Mount, Route
+
+    mcp = create_http_mcp_server(
+        host=host,
+        port=port,
+        mcp_path=mcp_path,
+        expose_full_name=expose_full_name,
+    )
+    if not hasattr(mcp, "streamable_http_app"):
+        raise RuntimeError(
+            "The installed mcp package does not expose streamable_http_app(). "
+            "Upgrade the 'mcp' dependency before using the dev HTTP fallback."
+        )
+
+    streamable_app = mcp.streamable_http_app()
+    resolved_path = mcp_path if mcp_path.startswith("/") else f"/{mcp_path}"
+
+    async def health(_request: Request) -> Response:
+        return PlainTextResponse(ROOT_TEXT, status_code=200)
+
+    async def cors_preflight(_request: Request) -> Response:
+        return Response(status_code=204, headers=CORS_HEADERS)
+
+    async def not_found(_request: Request) -> Response:
+        return PlainTextResponse("Not Found", status_code=404)
+
+    class McpCorsMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):  # noqa: ANN001
+            response = await call_next(request)
+            if request.url.path == resolved_path or request.url.path.startswith(resolved_path + "/"):
+                response.headers.setdefault("Access-Control-Allow-Origin", "*")
+                response.headers.setdefault("Access-Control-Expose-Headers", "Mcp-Session-Id")
+            return response
+
+    routes = [
+        Route("/", health, methods=["GET"]),
+        Route(resolved_path, cors_preflight, methods=["OPTIONS"]),
+        Route(f"{resolved_path}/{{path:path}}", cors_preflight, methods=["OPTIONS"]),
+    ]
+    for prefix in OAUTH_DISCOVERY_PREFIXES:
+        routes.append(Route(prefix, not_found, methods=["GET", "POST", "OPTIONS"]))
+        routes.append(Route(f"{prefix}/{{path:path}}", not_found, methods=["GET", "POST", "OPTIONS"]))
+    routes.append(Mount("/", streamable_app))
+
+    return Starlette(routes=routes, middleware=[McpCorsMiddleware])
+
+
 def run_http_mcp_server(
     *, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, mcp_path: str = DEFAULT_MCP_PATH
 ) -> None:
     """Run the development HTTP MCP server."""
 
-    mcp = create_http_mcp_server(host=host, port=port, mcp_path=mcp_path)
-    try:
-        mcp.run(transport="streamable-http")
-    except TypeError as exc:  # pragma: no cover - depends on installed mcp version.
-        raise RuntimeError(
-            "The installed mcp package does not support streamable-http transport. "
-            "Upgrade the 'mcp' dependency before using the dev HTTP fallback."
-        ) from exc
+    import uvicorn
+
+    resolved_host = validate_host(host)
+    app = create_apps_sdk_http_app(host=resolved_host, port=port, mcp_path=mcp_path)
+    uvicorn.run(app, host=resolved_host, port=int(port))
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
