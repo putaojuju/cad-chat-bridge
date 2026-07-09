@@ -12,6 +12,7 @@ from cad_chat_bridge.repo_manager.security import bridge_home, response_path, va
 
 REGISTRY_ENV = "CAD_CHAT_BRIDGE_REPO_REGISTRY"
 DEFAULT_ALLOWED_EXTENSIONS = (".lsp", ".py", ".md", ".json", ".txt")
+INVALID_REF_CHARS = set(":~^?*[\\")
 
 
 class RegistryError(ValueError):
@@ -96,6 +97,33 @@ def get_repo_entry(repo_id: str, *, path: str | Path | None = None) -> dict[str,
     raise RegistryError(f"repo is not in registry whitelist: {requested}")
 
 
+def validate_git_branch_ref(ref: str) -> str:
+    """Validate a branch name before using it in a git refspec."""
+
+    if not isinstance(ref, str) or not ref:
+        raise RegistryError("invalid ref")
+    if ref != ref.strip():
+        raise RegistryError("invalid ref: leading or trailing whitespace")
+    if any(ord(ch) < 32 or ord(ch) == 127 or ch.isspace() for ch in ref):
+        raise RegistryError("invalid ref: whitespace/control characters are not allowed")
+    if ref.startswith("-"):
+        raise RegistryError("invalid ref: cannot start with '-'")
+    if ref.startswith("/") or ref.endswith("/"):
+        raise RegistryError("invalid ref: cannot start or end with '/'")
+    if ref.startswith("refs/"):
+        raise RegistryError("pass branch names, not raw refs")
+    if ".." in ref or "//" in ref or "@{" in ref:
+        raise RegistryError("invalid ref")
+    if ref.endswith(".") or ref.endswith(".lock"):
+        raise RegistryError("invalid ref")
+    if any(ch in INVALID_REF_CHARS for ch in ref):
+        raise RegistryError("invalid ref: contains a forbidden git ref character")
+    for component in ref.split("/"):
+        if not component or component.startswith(".") or component.endswith("."):
+            raise RegistryError("invalid ref component")
+    return ref
+
+
 def ref_allowed(entry: dict[str, Any], ref: str) -> bool:
     """Return whether a ref matches the repo allowlist."""
 
@@ -105,13 +133,10 @@ def ref_allowed(entry: dict[str, Any], ref: str) -> bool:
 def ensure_ref_allowed(entry: dict[str, Any], ref: str) -> str:
     """Validate a branch/ref string against a registry entry."""
 
-    if not ref or ref.startswith("-") or ".." in ref or ref.endswith("."):
-        raise RegistryError("invalid ref")
-    if ref.startswith("refs/"):
-        raise RegistryError("pass branch names, not raw refs")
-    if not ref_allowed(entry, ref):
-        raise RegistryError(f"ref is not allowed for repo {entry['repo_id']}: {ref}")
-    return ref
+    validated = validate_git_branch_ref(ref)
+    if not ref_allowed(entry, validated):
+        raise RegistryError(f"ref is not allowed for repo {entry['repo_id']}: {validated}")
+    return validated
 
 
 def repo_registry_list(*, path: str | Path | None = None) -> dict[str, Any]:
