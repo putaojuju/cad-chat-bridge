@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cad-chat-bridge"
+version = "0.1.0"
+description = "Local-only MCP bridge skeleton for safely connecting ChatGPT-compatible clients to AutoCAD."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "CAD Chat Bridge contributors" }
+]
+dependencies = []
+
+[project.optional-dependencies]
+mcp = [
+  "mcp>=1.0",
+  "starlette>=0.37",
+  "uvicorn>=0.30",
+  "pywin32>=306; platform_system == 'Windows'",
+]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+]
+
+[project.scripts]
+cad-chat-bridge = "cad_chat_bridge.mcp_server:main"
+cad-chat-bridge-http = "cad_chat_bridge.http_mcp_server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"cad_chat_bridge.catalog" = ["default_catalog.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "C4", "UP"]
+ignore = ["E501"]
