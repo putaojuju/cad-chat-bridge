@@ -140,6 +140,7 @@ def test_validate_git_branch_ref_rejects_malicious_or_invalid_refs():
         "trailing/",
         "bad@{ref",
         "bad.lock",
+        "task/bad.lock/child",
         "bad..ref",
         "bad//ref",
         ".hidden/main",
