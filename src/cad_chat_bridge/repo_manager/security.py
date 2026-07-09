@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -17,7 +18,7 @@ ALLOWED_WORKSPACE_PREFIXES = (
     "workspace/artifacts",
     "workspace/logs",
 )
-FORBIDDEN_PARTS = {".git", "src"}
+WINDOWS_DRIVE_RE = re.compile(r"^[a-zA-Z]:[\\/]")
 
 
 def bridge_home() -> Path:
@@ -74,17 +75,19 @@ def validate_name(value: str, *, field: str) -> str:
     return value
 
 
-def _reject_network_path(raw: str) -> None:
+def _reject_network_or_absolute_path(raw: str) -> None:
     normalized = raw.replace("\\", "/")
     if normalized.startswith("//") or raw.startswith("\\\\"):
         raise ValueError("network paths are not allowed")
+    if WINDOWS_DRIVE_RE.match(raw):
+        raise ValueError("absolute paths are not allowed")
 
 
 def safe_relative_path(raw_path: str | Path, *, allow_src: bool = False) -> Path:
     """Validate and normalize a caller-provided relative path."""
 
     raw = str(raw_path)
-    _reject_network_path(raw)
+    _reject_network_or_absolute_path(raw)
     candidate = Path(raw)
     if candidate.is_absolute():
         raise ValueError("absolute paths are not allowed")
@@ -119,7 +122,10 @@ def ensure_workspace_write_path(task_root: Path, relative_path: str | Path) -> P
 
     relative = safe_relative_path(relative_path, allow_src=False).as_posix()
     if not any(relative == prefix or relative.startswith(prefix + "/") for prefix in ALLOWED_WORKSPACE_PREFIXES):
-        raise ValueError("writes are only allowed inside workspace/lisp, workspace/python, workspace/backups, workspace/artifacts or workspace/logs")
+        raise ValueError(
+            "writes are only allowed inside workspace/lisp, workspace/python, "
+            "workspace/backups, workspace/artifacts or workspace/logs"
+        )
     return ensure_under_root(task_root, relative, allow_src=False)
 
 
