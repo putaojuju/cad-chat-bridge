@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import stat
 import subprocess
 from datetime import datetime, timezone
@@ -78,7 +77,7 @@ def ref_commit(repo_id: str, ref: str) -> str:
     """Return commit SHA for a fetched ref in a local mirror."""
 
     mirror = mirror_path(repo_id)
-    return run_git(["--git-dir", str(mirror), "rev-parse", f"refs/remotes/origin/{ref}^{{commit}"])
+    return run_git(["--git-dir", str(mirror), "rev-parse", f"refs/remotes/origin/{ref}^{{commit}}"])
 
 
 def _make_repo_read_only(path: Path) -> None:
@@ -180,7 +179,15 @@ def repo_status(repo_id: str) -> dict[str, Any]:
         mirror = mirror_path(repo_id)
         refs: list[dict[str, str]] = []
         if mirror.exists():
-            output = run_git(["--git-dir", str(mirror), "for-each-ref", "--format=%(refname:strip=3) %(objectname)", "refs/remotes/origin"])
+            output = run_git(
+                [
+                    "--git-dir",
+                    str(mirror),
+                    "for-each-ref",
+                    "--format=%(refname:strip=3) %(objectname)",
+                    "refs/remotes/origin",
+                ]
+            )
             for line in output.splitlines():
                 if not line.strip():
                     continue
