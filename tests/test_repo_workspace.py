@@ -3,6 +3,7 @@ import json
 from cad_chat_bridge.repo_manager.git_ops import task_root, task_workspace_path
 from cad_chat_bridge.repo_manager.security import HOME_ENV, sha256_file
 from cad_chat_bridge.repo_manager.workspace import (
+    EMPTY_SHA256,
     workspace_apply_patch,
     workspace_list_artifacts,
     workspace_list_files,
@@ -46,8 +47,24 @@ def test_workspace_status_creates_logical_paths(tmp_path, monkeypatch):
     assert "local_path" not in result["workspace"]
 
 
-def test_workspace_apply_patch_new_file_with_empty_expected_hash(tmp_path, monkeypatch):
+def test_workspace_apply_patch_new_file_requires_empty_content_sha(tmp_path, monkeypatch):
     _root, _workspace = _make_task(tmp_path, monkeypatch)
+
+    result = workspace_apply_patch(
+        "task-001",
+        "workspace/lisp/demo.lsp",
+        expected_sha256=EMPTY_SHA256,
+        content="(princ)",
+    )
+
+    assert result["success"] is True
+    assert result["old_sha256"] == EMPTY_SHA256
+    assert result["file"]["logical_path"] == "workspace/lisp/demo.lsp"
+    assert result["backup"] is None
+
+
+def test_workspace_apply_patch_rejects_blank_expected_hash(tmp_path, monkeypatch):
+    _make_task(tmp_path, monkeypatch)
 
     result = workspace_apply_patch(
         "task-001",
@@ -56,9 +73,8 @@ def test_workspace_apply_patch_new_file_with_empty_expected_hash(tmp_path, monke
         content="(princ)",
     )
 
-    assert result["success"] is True
-    assert result["file"]["logical_path"] == "workspace/lisp/demo.lsp"
-    assert result["backup"] is None
+    assert result["success"] is False
+    assert result["error_type"] == "ValueError"
 
 
 def test_workspace_apply_patch_hash_mismatch(tmp_path, monkeypatch):
@@ -69,7 +85,7 @@ def test_workspace_apply_patch_hash_mismatch(tmp_path, monkeypatch):
     result = workspace_apply_patch(
         "task-001",
         "workspace/lisp/demo.lsp",
-        expected_sha256="wrong",
+        expected_sha256="0" * 64,
         content="new",
     )
 
@@ -102,13 +118,13 @@ def test_workspace_apply_patch_rejects_repo_and_src_and_path_escape(tmp_path, mo
     _make_task(tmp_path, monkeypatch)
 
     assert workspace_apply_patch(
-        "task-001", "repo/file.lsp", expected_sha256="", content="x"
+        "task-001", "repo/file.lsp", expected_sha256=EMPTY_SHA256, content="x"
     )["success"] is False
     assert workspace_apply_patch(
-        "task-001", "workspace/src/file.py", expected_sha256="", content="x"
+        "task-001", "workspace/src/file.py", expected_sha256=EMPTY_SHA256, content="x"
     )["success"] is False
     assert workspace_apply_patch(
-        "task-001", "workspace/lisp/../escape.lsp", expected_sha256="", content="x"
+        "task-001", "workspace/lisp/../escape.lsp", expected_sha256=EMPTY_SHA256, content="x"
     )["success"] is False
 
 
@@ -116,14 +132,43 @@ def test_workspace_apply_patch_rejects_absolute_and_network_paths(tmp_path, monk
     _make_task(tmp_path, monkeypatch)
 
     assert workspace_apply_patch(
-        "task-001", "/tmp/escape.lsp", expected_sha256="", content="x"
+        "task-001", "/tmp/escape.lsp", expected_sha256=EMPTY_SHA256, content="x"
     )["success"] is False
     assert workspace_apply_patch(
-        "task-001", r"C:\tmp\escape.lsp", expected_sha256="", content="x"
+        "task-001", r"C:\tmp\escape.lsp", expected_sha256=EMPTY_SHA256, content="x"
     )["success"] is False
     assert workspace_apply_patch(
-        "task-001", r"\\server\share\x.lsp", expected_sha256="", content="x"
+        "task-001", r"\\server\share\x.lsp", expected_sha256=EMPTY_SHA256, content="x"
     )["success"] is False
+
+
+def test_workspace_list_files_allows_simple_patterns(tmp_path, monkeypatch):
+    _root, workspace = _make_task(tmp_path, monkeypatch)
+    (workspace / "lisp" / "demo.lsp").write_text("lisp", encoding="utf-8")
+    (workspace / "python" / "tool.py").write_text("py", encoding="utf-8")
+
+    result = workspace_list_files("task-001", subdir="workspace", pattern="*.lsp")
+
+    assert result["success"] is True
+    assert [item["logical_path"] for item in result["files"]] == ["workspace/lisp/demo.lsp"]
+
+
+def test_workspace_list_files_rejects_path_like_patterns(tmp_path, monkeypatch):
+    _make_task(tmp_path, monkeypatch)
+
+    for pattern in ("../*", "workspace/**", r"C:\tmp\*", "//server/share/*"):
+        result = workspace_list_files("task-001", subdir="workspace", pattern=pattern)
+        assert result["success"] is False
+        assert result["error_type"] == "ValueError"
+
+
+def test_workspace_list_files_rejects_unapproved_pattern(tmp_path, monkeypatch):
+    _make_task(tmp_path, monkeypatch)
+
+    result = workspace_list_files("task-001", subdir="workspace", pattern="*.exe")
+
+    assert result["success"] is False
+    assert result["error_type"] == "ValueError"
 
 
 def test_workspace_list_and_read_files_artifacts_logs(tmp_path, monkeypatch):
