@@ -80,6 +80,12 @@ def ref_commit(repo_id: str, ref: str) -> str:
     return run_git(["--git-dir", str(mirror), "rev-parse", f"refs/remotes/origin/{ref}^{{commit}}"])
 
 
+def _remote_refspec(ref: str) -> str:
+    """Return the explicit branch-to-local-tracking refspec used by repo_sync."""
+
+    return f"refs/heads/{ref}:refs/remotes/origin/{ref}"
+
+
 def _make_repo_read_only(path: Path) -> None:
     """Best-effort mark worktree files as read-only.
 
@@ -145,7 +151,7 @@ def repo_sync(
             created = True
         else:
             run_git(["--git-dir", str(mirror), "remote", "set-url", "origin", entry["clone_url"]])
-        run_git(["--git-dir", str(mirror), "fetch", "origin", ref])
+        run_git(["--git-dir", str(mirror), "fetch", "origin", _remote_refspec(ref)])
         commit = ref_commit(repo_id, ref)
         if expected_commit and commit != expected_commit:
             raise GitOperationError("expected_commit does not match fetched ref")
