@@ -133,7 +133,7 @@ def ensure_workspace_read_path(task_root: Path, relative_path: str | Path) -> Pa
     """Return a safe readable workspace path."""
 
     relative = safe_relative_path(relative_path, allow_src=False).as_posix()
-    if not relative.startswith("workspace/"):
+    if relative != "workspace" and not relative.startswith("workspace/"):
         raise ValueError("workspace reads must stay under workspace/")
     return ensure_under_root(task_root, relative, allow_src=False)
 

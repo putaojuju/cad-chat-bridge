@@ -183,6 +183,7 @@ def create_apps_sdk_http_app(
     """Create an Apps SDK friendly ASGI app around the FastMCP streamable app."""
 
     from starlette.applications import Starlette
+    from starlette.middleware import Middleware
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.requests import Request
     from starlette.responses import PlainTextResponse, Response
@@ -231,7 +232,7 @@ def create_apps_sdk_http_app(
         routes.append(Route(f"{prefix}/{{path:path}}", not_found, methods=["GET", "POST", "OPTIONS"]))
     routes.append(Mount("/", streamable_app))
 
-    return Starlette(routes=routes, middleware=[McpCorsMiddleware])
+    return Starlette(routes=routes, middleware=[Middleware(McpCorsMiddleware)])
 
 
 def run_http_mcp_server(
