@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 from datetime import datetime, timezone
@@ -10,6 +11,7 @@ from typing import Any
 
 from cad_chat_bridge.repo_manager.git_ops import get_existing_task, task_workspace_path
 from cad_chat_bridge.repo_manager.security import (
+    WINDOWS_DRIVE_RE,
     ensure_workspace_read_path,
     ensure_workspace_write_path,
     logical_from_task_root,
@@ -18,10 +20,41 @@ from cad_chat_bridge.repo_manager.security import (
 )
 
 MAX_READ_BYTES = 256 * 1024
+EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
+ALLOWED_SIMPLE_PATTERNS = {
+    "*",
+    "*.lsp",
+    "*.py",
+    "*.json",
+    "*.log",
+    "*.txt",
+    "*.md",
+}
 
 
 def _now_stamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def validate_simple_glob_pattern(pattern: str) -> str:
+    """Restrict file-list patterns to simple filename globs."""
+
+    if not isinstance(pattern, str) or not pattern:
+        raise ValueError("pattern cannot be empty")
+    normalized = pattern.replace("\\", "/")
+    if (
+        "/" in normalized
+        or ".." in normalized
+        or normalized.startswith("//")
+        or pattern.startswith("\\\\")
+        or WINDOWS_DRIVE_RE.match(pattern)
+    ):
+        raise ValueError("pattern must be a simple filename glob, not a path")
+    if pattern not in ALLOWED_SIMPLE_PATTERNS:
+        raise ValueError(
+            "pattern must be one of: " + ", ".join(sorted(ALLOWED_SIMPLE_PATTERNS))
+        )
+    return pattern
 
 
 def _file_entry(task_root: Path, path: Path) -> dict[str, Any]:
@@ -70,11 +103,12 @@ def workspace_list_files(
 
     try:
         task_root, _manifest = get_existing_task(task_id)
+        safe_pattern = validate_simple_glob_pattern(pattern)
         base = ensure_workspace_read_path(task_root, subdir)
         if not base.exists():
             return {"success": True, "task_id": task_id, "files": []}
         results = []
-        for path in sorted(base.rglob(pattern)):
+        for path in sorted(base.rglob(safe_pattern)):
             if not path.is_file():
                 continue
             results.append(_file_entry(task_root, path))
@@ -112,6 +146,15 @@ def workspace_read_file(
         return {"success": False, "error_type": type(exc).__name__, "error": str(exc)}
 
 
+def _validate_expected_sha256(value: str) -> str:
+    if not isinstance(value, str) or len(value) != 64:
+        raise ValueError("expected_sha256 must be a 64-character SHA-256 hex digest")
+    lowered = value.lower()
+    if any(ch not in "0123456789abcdef" for ch in lowered):
+        raise ValueError("expected_sha256 must be a 64-character SHA-256 hex digest")
+    return lowered
+
+
 def workspace_apply_patch(
     task_id: str,
     relative_path: str,
@@ -122,19 +165,18 @@ def workspace_apply_patch(
     """Apply a replace patch inside workspace with hash check and backup."""
 
     try:
-        if not expected_sha256:
-            raise ValueError("expected_sha256 is required")
+        expected = _validate_expected_sha256(expected_sha256)
         task_root, _manifest = get_existing_task(task_id)
         target = ensure_workspace_write_path(task_root, relative_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         exists = target.exists()
-        old_sha = sha256_file(target) if exists else ""
-        if old_sha != expected_sha256:
+        old_sha = sha256_file(target) if exists else EMPTY_SHA256
+        if old_sha != expected:
             return {
                 "success": False,
                 "error_type": "HashMismatch",
                 "error": "expected_sha256 does not match current file",
-                "expected_sha256": expected_sha256,
+                "expected_sha256": expected,
                 "actual_sha256": old_sha,
             }
 
