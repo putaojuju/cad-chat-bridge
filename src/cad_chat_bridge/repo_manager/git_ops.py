@@ -11,7 +11,12 @@ from pathlib import Path
 from typing import Any
 
 from cad_chat_bridge.repo_manager.registry import RegistryError, ensure_ref_allowed, get_repo_entry
-from cad_chat_bridge.repo_manager.security import bridge_home, response_path, validate_name
+from cad_chat_bridge.repo_manager.security import (
+    bridge_home,
+    debug_paths_enabled,
+    response_path,
+    validate_name,
+)
 
 
 class GitOperationError(RuntimeError):
@@ -20,6 +25,15 @@ class GitOperationError(RuntimeError):
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _sanitize_git_error(text: str) -> str:
+    """Redact bridge-home paths from git errors unless debug path output is enabled."""
+
+    if debug_paths_enabled():
+        return text
+    home = str(bridge_home())
+    return text.replace(home, "<bridge_home>")
 
 
 def repos_root() -> Path:
@@ -69,7 +83,8 @@ def run_git(args: list[str], *, cwd: Path | None = None) -> str:
     except FileNotFoundError as exc:
         raise GitOperationError("git executable was not found on PATH") from exc
     if completed.returncode != 0:
-        raise GitOperationError(completed.stderr.strip() or completed.stdout.strip() or "git failed")
+        raw = completed.stderr.strip() or completed.stdout.strip() or "git failed"
+        raise GitOperationError(_sanitize_git_error(raw))
     return completed.stdout.strip()
 
 
