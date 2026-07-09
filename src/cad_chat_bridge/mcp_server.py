@@ -10,6 +10,20 @@ from cad_chat_bridge.autocad.com_client import get_active_document
 from cad_chat_bridge.autocad.diagnostics import diagnose_access
 from cad_chat_bridge.catalog.loader import describe_catalog_item, list_catalog
 from cad_chat_bridge.jsonutil import dumps, ok
+from cad_chat_bridge.repo_manager.git_ops import (
+    repo_create_task_worktree as repo_create_task_worktree_payload,
+)
+from cad_chat_bridge.repo_manager.git_ops import repo_status as repo_status_payload
+from cad_chat_bridge.repo_manager.git_ops import repo_sync as repo_sync_payload
+from cad_chat_bridge.repo_manager.registry import repo_registry_list as repo_registry_list_payload
+from cad_chat_bridge.repo_manager.workspace import (
+    workspace_apply_patch as workspace_apply_patch_payload,
+)
+from cad_chat_bridge.repo_manager.workspace import workspace_list_artifacts as workspace_list_artifacts_payload
+from cad_chat_bridge.repo_manager.workspace import workspace_list_files as workspace_list_files_payload
+from cad_chat_bridge.repo_manager.workspace import workspace_read_file as workspace_read_file_payload
+from cad_chat_bridge.repo_manager.workspace import workspace_read_log as workspace_read_log_payload
+from cad_chat_bridge.repo_manager.workspace import workspace_status as workspace_status_payload
 
 
 REGISTERED_TOOLS = (
@@ -18,6 +32,16 @@ REGISTERED_TOOLS = (
     "cad_get_active_document",
     "cad_list_catalog",
     "cad_describe_catalog_item",
+    "repo_registry_list",
+    "repo_status",
+    "repo_sync",
+    "repo_create_task_worktree",
+    "workspace_status",
+    "workspace_list_files",
+    "workspace_read_file",
+    "workspace_apply_patch",
+    "workspace_list_artifacts",
+    "workspace_read_log",
 )
 
 DANGEROUS_TOOLS_NOT_REGISTERED = (
@@ -26,6 +50,10 @@ DANGEROUS_TOOLS_NOT_REGISTERED = (
     "cad_load_lisp",
     "cad_save_as",
     "cad_write_file",
+    "lisp_load_staged",
+    "lisp_run_registry_item",
+    "python_run_registered",
+    "python_exec",
 )
 
 PayloadFilter = Callable[[dict[str, Any]], dict[str, Any]]
@@ -118,6 +146,118 @@ def create_mcp_server(
         """Describe one safe public catalog entry by id."""
 
         return dumps(describe_catalog_item(item_id))
+
+    @mcp.tool()
+    def repo_registry_list() -> str:
+        """List GitHub repositories allowed for local sync."""
+
+        return dumps(repo_registry_list_payload())
+
+    @mcp.tool()
+    def repo_status(repo_id: str) -> str:
+        """Return local mirror and task worktree status for one white-listed repo."""
+
+        return dumps(repo_status_payload(repo_id))
+
+    @mcp.tool()
+    def repo_sync(
+        repo_id: str,
+        ref: str,
+        expected_remote: str | None = None,
+        expected_commit: str | None = None,
+    ) -> str:
+        """Fetch a white-listed GitHub repo/ref into the local mirror."""
+
+        return dumps(
+            repo_sync_payload(
+                repo_id,
+                ref,
+                expected_remote=expected_remote,
+                expected_commit=expected_commit,
+            )
+        )
+
+    @mcp.tool()
+    def repo_create_task_worktree(
+        repo_id: str,
+        ref: str,
+        task_id: str,
+        expected_commit: str | None = None,
+    ) -> str:
+        """Create a read-only task worktree and script workspace."""
+
+        return dumps(
+            repo_create_task_worktree_payload(
+                repo_id,
+                ref,
+                task_id,
+                expected_commit=expected_commit,
+            )
+        )
+
+    @mcp.tool()
+    def workspace_status(task_id: str) -> str:
+        """Return workspace directory status for a task."""
+
+        return dumps(workspace_status_payload(task_id))
+
+    @mcp.tool()
+    def workspace_list_files(
+        task_id: str,
+        subdir: str = "workspace",
+        pattern: str = "*",
+        max_results: int = 100,
+    ) -> str:
+        """List files under a task workspace."""
+
+        return dumps(
+            workspace_list_files_payload(
+                task_id,
+                subdir=subdir,
+                pattern=pattern,
+                max_results=max_results,
+            )
+        )
+
+    @mcp.tool()
+    def workspace_read_file(
+        task_id: str,
+        relative_path: str,
+        max_bytes: int = 262144,
+    ) -> str:
+        """Read a UTF-8 text file from a task workspace."""
+
+        return dumps(workspace_read_file_payload(task_id, relative_path, max_bytes=max_bytes))
+
+    @mcp.tool()
+    def workspace_apply_patch(
+        task_id: str,
+        relative_path: str,
+        expected_sha256: str,
+        content: str,
+    ) -> str:
+        """Replace one workspace file when the expected SHA-256 matches."""
+
+        return dumps(
+            workspace_apply_patch_payload(
+                task_id,
+                relative_path,
+                expected_sha256=expected_sha256,
+                content=content,
+            )
+        )
+
+    @mcp.tool()
+    def workspace_list_artifacts(task_id: str, max_results: int = 100) -> str:
+        """List files under workspace/artifacts."""
+
+        return dumps(workspace_list_artifacts_payload(task_id, max_results=max_results))
+
+    @mcp.tool()
+    def workspace_read_log(task_id: str, relative_path: str, max_bytes: int = 262144) -> str:
+        """Read a file under workspace/logs."""
+
+        return dumps(workspace_read_log_payload(task_id, relative_path, max_bytes=max_bytes))
 
     return mcp
 
