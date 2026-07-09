@@ -7,6 +7,7 @@ from cad_chat_bridge.repo_manager.registry import (
     ensure_ref_allowed,
     get_repo_entry,
     repo_registry_list,
+    validate_git_branch_ref,
     validate_registry,
 )
 
@@ -121,3 +122,37 @@ def test_ref_allowlist():
         ensure_ref_allowed(entry, "refs/heads/main")
     with pytest.raises(RegistryError):
         ensure_ref_allowed(entry, "feature/abc")
+
+
+def test_validate_git_branch_ref_rejects_malicious_or_invalid_refs():
+    invalid_refs = [
+        "bad ref",
+        "bad\tref",
+        "bad\nref",
+        "bad:ref",
+        "bad~ref",
+        "bad^ref",
+        "bad?ref",
+        "bad*ref",
+        "bad[ref",
+        r"bad\ref",
+        "/leading",
+        "trailing/",
+        "bad@{ref",
+        "bad.lock",
+        "bad..ref",
+        "bad//ref",
+        ".hidden/main",
+        "main.",
+        "-bad",
+    ]
+
+    for ref in invalid_refs:
+        with pytest.raises(RegistryError):
+            validate_git_branch_ref(ref)
+
+
+def test_validate_git_branch_ref_allows_normal_task_refs():
+    assert validate_git_branch_ref("main") == "main"
+    assert validate_git_branch_ref("task/abc-123") == "task/abc-123"
+    assert validate_git_branch_ref("repo-manager-workspace-2a") == "repo-manager-workspace-2a"
