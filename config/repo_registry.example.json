@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "repos": [
+    {
+      "repo_id": "cad-chat-bridge",
+      "full_name": "putaojuju/cad-chat-bridge",
+      "clone_url": "https://github.com/putaojuju/cad-chat-bridge.git",
+      "default_branch": "main",
+      "allowed_ref_patterns": [
+        "main",
+        "init-*",
+        "repo-manager-*",
+        "task/*",
+        "feature/*"
+      ],
+      "allowed_file_extensions": [
+        ".lsp",
+        ".py",
+        ".md",
+        ".json",
+        ".txt"
+      ],
+      "forbidden_path_parts": [
+        ".git",
+        "src"
+      ],
+      "trust_level": "public-dev",
+      "enabled": true
+    }
+  ]
+}

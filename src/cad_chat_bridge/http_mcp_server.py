@@ -1,8 +1,8 @@
 """Development-only HTTP MCP server fallback.
 
 This module is intended for Apps SDK server URL testing through a local tunnel.
-It keeps the same five MVP tools as the stdio server and does not add any
-write-capable CAD tools.
+It keeps only the five MVP read/diagnostic tools by default. Repo/workspace
+mutating tools require an explicit local environment opt-in.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import argparse
 import os
 from typing import Any
 
-from cad_chat_bridge.mcp_server import REGISTERED_TOOLS, create_mcp_server
+from cad_chat_bridge.mcp_server import MVP_TOOLS, REGISTERED_TOOLS, create_mcp_server
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 3333
@@ -19,7 +19,8 @@ DEFAULT_MCP_PATH = "/mcp"
 ROOT_TEXT = "CAD Chat Bridge MCP server"
 FULL_NAME_ENV = "CAD_CHAT_BRIDGE_HTTP_EXPOSE_FULLNAME"
 ALLOW_PUBLIC_BIND_ENV = "CAD_CHAT_BRIDGE_HTTP_ALLOW_PUBLIC_BIND"
-HTTP_REGISTERED_TOOLS = REGISTERED_TOOLS
+WORKSPACE_TOOLS_ENV = "CAD_CHAT_BRIDGE_HTTP_ENABLE_WORKSPACE_TOOLS"
+HTTP_REGISTERED_TOOLS = MVP_TOOLS
 HTTP_CAD_GET_ACTIVE_DOCUMENT_ACCEPTS_ALLOW_START = False
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -45,6 +46,12 @@ def http_exposes_full_name(*, environ: dict[str, str] | None = None) -> bool:
     """Return whether HTTP mode may include AutoCAD document FullName."""
 
     return env_flag(FULL_NAME_ENV, environ=environ)
+
+
+def http_workspace_tools_enabled(*, environ: dict[str, str] | None = None) -> bool:
+    """Return whether HTTP mode may register repo/workspace tools."""
+
+    return env_flag(WORKSPACE_TOOLS_ENV, environ=environ)
 
 
 def public_bind_allowed(*, environ: dict[str, str] | None = None) -> bool:
@@ -121,12 +128,16 @@ def create_http_mcp_server(
     port: int = DEFAULT_PORT,
     mcp_path: str = DEFAULT_MCP_PATH,
     expose_full_name: bool | None = None,
+    enable_workspace_tools: bool | None = None,
 ) -> Any:
     """Create a FastMCP server configured for streamable HTTP on /mcp."""
 
     resolved_host = validate_host(host)
     resolved_path = mcp_path if mcp_path.startswith("/") else f"/{mcp_path}"
     should_expose_full_name = http_exposes_full_name() if expose_full_name is None else expose_full_name
+    should_enable_workspace_tools = (
+        http_workspace_tools_enabled() if enable_workspace_tools is None else enable_workspace_tools
+    )
 
     mcp = create_mcp_server(
         transport_label="http",
@@ -137,6 +148,7 @@ def create_http_mcp_server(
             payload, expose_full_name=should_expose_full_name
         ),
         expose_allow_start_param=HTTP_CAD_GET_ACTIVE_DOCUMENT_ACCEPTS_ALLOW_START,
+        enable_workspace_tools=should_enable_workspace_tools,
     )
     configure_http_settings(mcp, host=resolved_host, port=port, mcp_path=resolved_path)
     return mcp
@@ -166,10 +178,12 @@ def create_apps_sdk_http_app(
     port: int = DEFAULT_PORT,
     mcp_path: str = DEFAULT_MCP_PATH,
     expose_full_name: bool | None = None,
+    enable_workspace_tools: bool | None = None,
 ) -> Any:
     """Create an Apps SDK friendly ASGI app around the FastMCP streamable app."""
 
     from starlette.applications import Starlette
+    from starlette.middleware import Middleware
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.requests import Request
     from starlette.responses import PlainTextResponse, Response
@@ -180,6 +194,7 @@ def create_apps_sdk_http_app(
         port=port,
         mcp_path=mcp_path,
         expose_full_name=expose_full_name,
+        enable_workspace_tools=enable_workspace_tools,
     )
     if not hasattr(mcp, "streamable_http_app"):
         raise RuntimeError(
@@ -217,7 +232,7 @@ def create_apps_sdk_http_app(
         routes.append(Route(f"{prefix}/{{path:path}}", not_found, methods=["GET", "POST", "OPTIONS"]))
     routes.append(Mount("/", streamable_app))
 
-    return Starlette(routes=routes, middleware=[McpCorsMiddleware])
+    return Starlette(routes=routes, middleware=[Middleware(McpCorsMiddleware)])
 
 
 def run_http_mcp_server(
