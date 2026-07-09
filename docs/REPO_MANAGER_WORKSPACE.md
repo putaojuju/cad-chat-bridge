@@ -6,7 +6,7 @@ This document describes PR #2A: Repo Manager + Script Workspace basics.
 
 PR #2A adds controlled local repository synchronization and task workspaces. It does not add CAD command execution or script execution.
 
-Included tools:
+Included tools for local stdio mode:
 
 - `repo_registry_list`
 - `repo_status`
@@ -28,6 +28,20 @@ Explicitly not included:
 - `cad_run_lisp`
 - arbitrary Python execution
 - arbitrary LISP execution
+
+## HTTP exposure gate
+
+The dev HTTP connector is often exposed through a public ngrok or Cloudflare Tunnel URL. For that reason, HTTP mode keeps only the five MVP read/diagnostic tools by default.
+
+Repo/workspace tools are registered in HTTP mode only when explicitly enabled:
+
+```powershell
+$env:CAD_CHAT_BRIDGE_HTTP_ENABLE_WORKSPACE_TOOLS = "1"
+```
+
+Treat any tunnel URL with workspace tools enabled as sensitive. Use it only for short-lived local development testing, then unset the environment variable and restart the HTTP server.
+
+`cad_ping` reports `workspace_tools_enabled` for the current transport.
 
 ## Architecture
 
@@ -78,7 +92,7 @@ Example:
 
 ## Ref validation
 
-`repo_sync` and `repo_create_task_worktree` accept branch names only, not raw refs. The branch must pass the repo's `allowed_ref_patterns` and must not contain git-refspec-dangerous syntax such as whitespace/control characters, `:`, `~`, `^`, `?`, `*`, `[`, `\\`, leading or trailing `/`, `@{`, `..`, `//`, or a `.lock` suffix.
+`repo_sync` and `repo_create_task_worktree` accept branch names only, not raw refs. The branch must pass the repo's `allowed_ref_patterns` and must not contain git-refspec-dangerous syntax such as whitespace/control characters, `:`, `~`, `^`, `?`, `*`, `[`, `\\`, leading or trailing `/`, `@{`, `..`, `//`, trailing `.`, or any path component ending in `.lock`.
 
 ## Local layout
 
