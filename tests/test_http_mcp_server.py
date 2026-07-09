@@ -27,6 +27,20 @@ from cad_chat_bridge.http_mcp_server import (
 from cad_chat_bridge.mcp_server import DANGEROUS_TOOLS_NOT_REGISTERED, REGISTERED_TOOLS
 
 
+PR_2A_TOOLS = {
+    "repo_registry_list",
+    "repo_status",
+    "repo_sync",
+    "repo_create_task_worktree",
+    "workspace_status",
+    "workspace_list_files",
+    "workspace_read_file",
+    "workspace_apply_patch",
+    "workspace_list_artifacts",
+    "workspace_read_log",
+}
+
+
 def _install_fake_fastmcp(monkeypatch: pytest.MonkeyPatch):
     class FakeFastMCP:
         last_instance = None
@@ -114,15 +128,16 @@ def test_http_server_module_imports_with_expected_defaults():
     assert DEFAULT_MCP_PATH == "/mcp"
 
 
-def test_http_server_uses_only_five_mvp_tools():
+def test_http_server_uses_registered_mvp_and_repo_workspace_tools():
     assert HTTP_REGISTERED_TOOLS == REGISTERED_TOOLS
-    assert set(HTTP_REGISTERED_TOOLS) == {
+    assert {
         "cad_ping",
         "cad_diagnose_access",
         "cad_get_active_document",
         "cad_list_catalog",
         "cad_describe_catalog_item",
-    }
+    }.issubset(set(HTTP_REGISTERED_TOOLS))
+    assert PR_2A_TOOLS.issubset(set(HTTP_REGISTERED_TOOLS))
 
 
 def test_http_server_does_not_register_dangerous_tools():
