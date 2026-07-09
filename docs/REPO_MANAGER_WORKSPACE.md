@@ -76,6 +76,10 @@ Example:
 }
 ```
 
+## Ref validation
+
+`repo_sync` and `repo_create_task_worktree` accept branch names only, not raw refs. The branch must pass the repo's `allowed_ref_patterns` and must not contain git-refspec-dangerous syntax such as whitespace/control characters, `:`, `~`, `^`, `?`, `*`, `[`, `\\`, leading or trailing `/`, `@{`, `..`, `//`, or a `.lock` suffix.
+
 ## Local layout
 
 Default bridge home:
@@ -141,6 +145,7 @@ Rejected paths:
 
 ```text
 absolute paths
+Windows drive paths
 .. path traversal
 network paths / UNC paths
 .git
@@ -150,11 +155,29 @@ repo
 
 Every write requires `expected_sha256`. Existing files are backed up before replacement.
 
-For a new file, use an empty expected hash:
+For a new file, use the SHA-256 of empty content:
 
 ```text
-""
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 ```
+
+Blank `expected_sha256` is rejected.
+
+## Workspace file listing
+
+`workspace_list_files(pattern=...)` only accepts simple filename glob patterns:
+
+```text
+*
+*.json
+*.log
+*.lsp
+*.md
+*.py
+*.txt
+```
+
+Path-like patterns such as `../*`, `workspace/**`, `C:\tmp\*`, and `//server/share/*` are rejected.
 
 ## Example flow
 
@@ -186,14 +209,14 @@ For a new file, use an empty expected hash:
 }
 ```
 
-4. Write a workspace file:
+4. Write a new workspace file:
 
 ```json
 {
   "tool": "workspace_apply_patch",
   "task_id": "task-001",
   "relative_path": "workspace/lisp/demo.lsp",
-  "expected_sha256": "",
+  "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "content": "(princ)"
 }
 ```
