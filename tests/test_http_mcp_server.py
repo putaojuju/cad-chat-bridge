@@ -17,28 +17,24 @@ from cad_chat_bridge.http_mcp_server import (
     HTTP_CAD_GET_ACTIVE_DOCUMENT_ACCEPTS_ALLOW_START,
     HTTP_REGISTERED_TOOLS,
     ROOT_TEXT,
+    WORKSPACE_TOOLS_ENV,
     create_apps_sdk_http_app,
     create_http_mcp_server,
     http_exposes_full_name,
+    http_workspace_tools_enabled,
     redact_active_document_payload,
     redact_diagnostic_payload,
     validate_host,
 )
-from cad_chat_bridge.mcp_server import DANGEROUS_TOOLS_NOT_REGISTERED, REGISTERED_TOOLS
+from cad_chat_bridge.mcp_server import (
+    DANGEROUS_TOOLS_NOT_REGISTERED,
+    MVP_TOOLS,
+    REGISTERED_TOOLS,
+    REPO_WORKSPACE_TOOLS,
+)
 
 
-PR_2A_TOOLS = {
-    "repo_registry_list",
-    "repo_status",
-    "repo_sync",
-    "repo_create_task_worktree",
-    "workspace_status",
-    "workspace_list_files",
-    "workspace_read_file",
-    "workspace_apply_patch",
-    "workspace_list_artifacts",
-    "workspace_read_log",
-}
+PR_2A_TOOLS = set(REPO_WORKSPACE_TOOLS)
 
 
 def _install_fake_fastmcp(monkeypatch: pytest.MonkeyPatch):
@@ -128,21 +124,54 @@ def test_http_server_module_imports_with_expected_defaults():
     assert DEFAULT_MCP_PATH == "/mcp"
 
 
-def test_http_server_uses_registered_mvp_and_repo_workspace_tools():
-    assert HTTP_REGISTERED_TOOLS == REGISTERED_TOOLS
-    assert {
+def test_http_default_tool_set_is_mvp_only():
+    assert HTTP_REGISTERED_TOOLS == MVP_TOOLS
+    assert set(HTTP_REGISTERED_TOOLS) == {
         "cad_ping",
         "cad_diagnose_access",
         "cad_get_active_document",
         "cad_list_catalog",
         "cad_describe_catalog_item",
-    }.issubset(set(HTTP_REGISTERED_TOOLS))
-    assert PR_2A_TOOLS.issubset(set(HTTP_REGISTERED_TOOLS))
+    }
+    assert PR_2A_TOOLS.isdisjoint(set(HTTP_REGISTERED_TOOLS))
+
+
+def test_http_workspace_tools_env_flag_is_off_by_default():
+    assert http_workspace_tools_enabled(environ={}) is False
+    assert http_workspace_tools_enabled(environ={WORKSPACE_TOOLS_ENV: "1"}) is True
+
+
+def test_http_server_default_does_not_register_workspace_tools(monkeypatch):
+    _install_fake_fastmcp(monkeypatch)
+
+    server = create_http_mcp_server(enable_workspace_tools=False)
+
+    assert set(server.tools).issuperset(set(MVP_TOOLS))
+    assert "repo_sync" not in server.tools
+    assert "repo_create_task_worktree" not in server.tools
+    assert "workspace_apply_patch" not in server.tools
+    ping = json.loads(server.tools["cad_ping"]())
+    assert ping["workspace_tools_enabled"] is False
+    assert PR_2A_TOOLS.isdisjoint(set(ping["tools"]))
+
+
+def test_http_server_can_enable_workspace_tools_with_explicit_opt_in(monkeypatch):
+    _install_fake_fastmcp(monkeypatch)
+
+    server = create_http_mcp_server(enable_workspace_tools=True)
+
+    assert set(MVP_TOOLS).issubset(set(server.tools))
+    assert PR_2A_TOOLS.issubset(set(server.tools))
+    ping = json.loads(server.tools["cad_ping"]())
+    assert ping["workspace_tools_enabled"] is True
+    assert PR_2A_TOOLS.issubset(set(ping["tools"]))
 
 
 def test_http_server_does_not_register_dangerous_tools():
     for tool in DANGEROUS_TOOLS_NOT_REGISTERED:
         assert tool not in HTTP_REGISTERED_TOOLS
+    assert "cad_run_lisp" not in REGISTERED_TOOLS
+    assert "cad_send_command" not in REGISTERED_TOOLS
 
 
 def test_validate_host_rejects_public_wildcard_by_default():
@@ -250,7 +279,7 @@ def test_http_get_active_document_schema_omits_allow_start_and_forces_false(monk
 
     monkeypatch.setattr(mcp_server_module, "get_active_document", fake_get_active_document)
 
-    server = create_http_mcp_server(expose_full_name=False)
+    server = create_http_mcp_server(expose_full_name=False, enable_workspace_tools=False)
     tool = server.tools["cad_get_active_document"]
 
     assert HTTP_CAD_GET_ACTIVE_DOCUMENT_ACCEPTS_ALLOW_START is False
@@ -285,7 +314,7 @@ def test_http_diagnose_access_tool_redacts_diagnostics_by_default(monkeypatch):
 
     monkeypatch.setattr(mcp_server_module, "diagnose_access", fake_diagnose_access)
 
-    server = create_http_mcp_server(expose_full_name=False)
+    server = create_http_mcp_server(expose_full_name=False, enable_workspace_tools=False)
     response = json.loads(server.tools["cad_diagnose_access"]())
 
     assert "full_name" not in response["com"]
@@ -295,7 +324,7 @@ def test_http_diagnose_access_tool_redacts_diagnostics_by_default(monkeypatch):
 
 def test_apps_sdk_http_get_root_returns_text(monkeypatch):
     _install_fake_fastmcp(monkeypatch)
-    app = create_apps_sdk_http_app()
+    app = create_apps_sdk_http_app(enable_workspace_tools=False)
 
     status, headers, body = _request(app, "GET", "/")
 
@@ -306,7 +335,7 @@ def test_apps_sdk_http_get_root_returns_text(monkeypatch):
 
 def test_apps_sdk_http_options_mcp_returns_cors(monkeypatch):
     _install_fake_fastmcp(monkeypatch)
-    app = create_apps_sdk_http_app()
+    app = create_apps_sdk_http_app(enable_workspace_tools=False)
 
     status, headers, body = _request(app, "OPTIONS", "/mcp")
 
@@ -318,7 +347,7 @@ def test_apps_sdk_http_options_mcp_returns_cors(monkeypatch):
 
 def test_apps_sdk_http_options_mcp_actions_returns_cors(monkeypatch):
     _install_fake_fastmcp(monkeypatch)
-    app = create_apps_sdk_http_app()
+    app = create_apps_sdk_http_app(enable_workspace_tools=False)
 
     status, headers, body = _request(app, "OPTIONS", "/mcp/actions")
 
@@ -330,7 +359,7 @@ def test_apps_sdk_http_options_mcp_actions_returns_cors(monkeypatch):
 
 def test_apps_sdk_http_oauth_discovery_returns_404(monkeypatch):
     _install_fake_fastmcp(monkeypatch)
-    app = create_apps_sdk_http_app()
+    app = create_apps_sdk_http_app(enable_workspace_tools=False)
 
     for path in (
         "/.well-known/oauth-authorization-server",
@@ -344,7 +373,7 @@ def test_apps_sdk_http_oauth_discovery_returns_404(monkeypatch):
 
 def test_apps_sdk_http_mcp_path_still_reaches_mcp_endpoint(monkeypatch):
     _install_fake_fastmcp(monkeypatch)
-    app = create_apps_sdk_http_app()
+    app = create_apps_sdk_http_app(enable_workspace_tools=False)
 
     status, headers, body = _request(app, "POST", "/mcp")
 
