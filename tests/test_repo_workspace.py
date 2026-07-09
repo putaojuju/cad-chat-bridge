@@ -119,6 +119,9 @@ def test_workspace_apply_patch_rejects_absolute_and_network_paths(tmp_path, monk
         "task-001", "/tmp/escape.lsp", expected_sha256="", content="x"
     )["success"] is False
     assert workspace_apply_patch(
+        "task-001", r"C:\tmp\escape.lsp", expected_sha256="", content="x"
+    )["success"] is False
+    assert workspace_apply_patch(
         "task-001", r"\\server\share\x.lsp", expected_sha256="", content="x"
     )["success"] is False
 
