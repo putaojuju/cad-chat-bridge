@@ -119,7 +119,12 @@ def validate_git_branch_ref(ref: str) -> str:
     if any(ch in INVALID_REF_CHARS for ch in ref):
         raise RegistryError("invalid ref: contains a forbidden git ref character")
     for component in ref.split("/"):
-        if not component or component.startswith(".") or component.endswith("."):
+        if (
+            not component
+            or component.startswith(".")
+            or component.endswith(".")
+            or component.endswith(".lock")
+        ):
             raise RegistryError("invalid ref component")
     return ref
 
